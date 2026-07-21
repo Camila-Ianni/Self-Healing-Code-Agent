@@ -102,11 +102,18 @@ def main() -> None:
         test_file = (root / args.test_file).resolve() if not args.test_file.is_absolute() else args.test_file
         if not test_file.exists():
             raise SystemExit(f"No existe el test: {test_file}")
-        try:
-            rel_test = test_file.relative_to(root)
-            args.test_command = f"pytest -q {shlex.quote(str(rel_test))}"
-        except ValueError:
-            args.test_command = f"pytest -q {shlex.quote(str(test_file))}"
+        if test_file.suffix == ".go":
+            try:
+                rel_dir = test_file.parent.relative_to(root)
+                args.test_command = f"cd {shlex.quote(str(rel_dir))} && go test -v"
+            except ValueError:
+                args.test_command = f"cd {shlex.quote(str(test_file.parent))} && go test -v"
+        else:
+            try:
+                rel_test = test_file.relative_to(root)
+                args.test_command = f"pytest -q {shlex.quote(str(rel_test))}"
+            except ValueError:
+                args.test_command = f"pytest -q {shlex.quote(str(test_file))}"
         if args.source is None:
             args.source = source_from_test(test_file)
             

@@ -48,15 +48,18 @@ class TerminalView:
         self.console.print("[bold red]⚡ CRITICAL INTEGRITY EXCEPTION DETECTED ⚡[/bold red]")
         
         target_display = "Desconocido"
-        if evidence.target_file:
-            try:
-                target_display = str(evidence.target_file.relative_to(self.root.resolve()))
-            except ValueError:
-                target_display = str(evidence.target_file.name)
+        if evidence.target_files:
+            rel_files = []
+            for t in evidence.target_files:
+                try:
+                    rel_files.append(str(t.relative_to(self.root.resolve())))
+                except ValueError:
+                    rel_files.append(str(t.name))
+            target_display = ", ".join(rel_files)
 
         error_panel = Panel(
             f"[bold white]EXCEPTION METRIC:[/bold white] [bright_red]{evidence.error_message}[/bright_red]\n\n"
-            f"[bold white]TARGET SOURCE COMPONENT:[/bold white] [yellow]{target_display}[/yellow]\n"
+            f"[bold white]TARGET SOURCE COMPONENT(S):[/bold white] [yellow]{target_display}[/yellow]\n"
             f"[bold white]DIAGNOSTIC ENGINE:[/bold white] [magenta]STARK-PARSER v2.4 (Deep Frame Scanner)[/magenta]",
             title=f"[bold bright_red]❖ EXCEPTION LOG ({evidence.language.upper()}) ❖[/bold bright_red]",
             border_style="red",
@@ -86,8 +89,8 @@ class TerminalView:
                 except ValueError:
                     rel_path = frame.file_path.name
                 
-                # Highlight the target file we will modify in high-contrast neon yellow
-                if frame.file_path == evidence.target_file:
+                # Highlight the target files we will modify in high-contrast neon yellow
+                if frame.file_path in evidence.target_files:
                     style = "bold yellow"
                     idx_str = f"◈ {idx + 1}"
                 else:
@@ -153,6 +156,18 @@ class TerminalView:
         self.console.print()
         
         return self.assume_yes or Confirm.ask("[bold cyan]▶ Authorize neural patch injection?[/bold cyan]", default=True, console=self.console)
+
+    def ask_rollback(self) -> bool:
+        self.stop()
+        self.console.print()
+        self.console.print("[bold yellow]◈ [SYSTEM] neural patch applied temporarily to working tree.[/bold yellow]")
+        self.console.print("[dim yellow]Puedes realizar pruebas manuales en tu terminal/entorno ahora mismo.[/dim yellow]")
+        keep = Confirm.ask(
+            "[bold cyan]▶ ¿Deseas conservar los cambios aplicados? (Si seleccionas 'No', se realizará un ROLLBACK automático)[/bold cyan]", 
+            default=True, 
+            console=self.console
+        )
+        return keep
 
     def stop(self) -> None:
         if self.status_active:

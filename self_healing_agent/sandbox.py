@@ -49,11 +49,11 @@ class DockerSandbox(Sandbox):
         self.timeout = timeout
         self.fallback_triggered = False
 
-    def validate(self, command: str, root: Path, target: Path, proposed: str) -> TestResult:
-        try:
-            relative_target = target.resolve().relative_to(root.resolve())
-        except ValueError as exc:
-            raise SandboxError("El archivo a validar debe pertenecer al proyecto.") from exc
+    def validate(self, command: str, root: Path, proposed_patches: dict[Path, str] | Path, proposed: str | None = None) -> TestResult:
+        if isinstance(proposed_patches, Path):
+            patches = {proposed_patches: proposed}
+        else:
+            patches = proposed_patches
 
         sandbox_tmp = tempfile.mkdtemp(prefix="self-healing-")
         try:
@@ -63,7 +63,13 @@ class DockerSandbox(Sandbox):
                 sandbox_root,
                 ignore=shutil.ignore_patterns(".git", ".venv", ".self-healing-backups", "__pycache__", ".pytest_cache"),
             )
-            (sandbox_root / relative_target).write_text(proposed, encoding="utf-8")
+            for target, proposed_content in patches.items():
+                try:
+                    relative_target = target.resolve().relative_to(root.resolve())
+                except ValueError as exc:
+                    raise SandboxError(f"El archivo a validar ({target}) debe pertenecer al proyecto.") from exc
+                (sandbox_root / relative_target).write_text(proposed_content, encoding="utf-8")
+
             docker_command = [
                 "docker", "run", "--rm", "--network", "none", "--cap-drop", "ALL",
                 "--security-opt", "no-new-privileges", "--pids-limit", "256", "--memory", "768m",
@@ -99,11 +105,11 @@ class LocalSubprocessSandbox(Sandbox):
         self.timeout = timeout
         self.fallback_triggered = False
 
-    def validate(self, command: str, root: Path, target: Path, proposed: str) -> TestResult:
-        try:
-            relative_target = target.resolve().relative_to(root.resolve())
-        except ValueError as exc:
-            raise SandboxError("El archivo a validar debe pertenecer al proyecto.") from exc
+    def validate(self, command: str, root: Path, proposed_patches: dict[Path, str] | Path, proposed: str | None = None) -> TestResult:
+        if isinstance(proposed_patches, Path):
+            patches = {proposed_patches: proposed}
+        else:
+            patches = proposed_patches
 
         # Setup resource limits inside the subprocess (POSIX only)
         def limit_resources():
@@ -138,8 +144,13 @@ class LocalSubprocessSandbox(Sandbox):
                 ignore=shutil.ignore_patterns(".git", ".venv", ".self-healing-backups", "__pycache__", ".pytest_cache"),
             )
             
-            # Apply proposed patch in sandbox
-            (sandbox_root / relative_target).write_text(proposed, encoding="utf-8")
+            # Apply proposed patches in sandbox
+            for target, proposed_content in patches.items():
+                try:
+                    relative_target = target.resolve().relative_to(root.resolve())
+                except ValueError as exc:
+                    raise SandboxError(f"El archivo a validar ({target}) debe pertenecer al proyecto.") from exc
+                (sandbox_root / relative_target).write_text(proposed_content, encoding="utf-8")
             
             # Make sure build/cache directories exist in temporary folder
             tmp_dir = sandbox_root / "tmp"

@@ -9,7 +9,7 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from .controller import RepairController, RepairError
+from .controller import RepairController, RepairError, restore_all_backups
 from .sandbox import DockerSandbox, LocalSubprocessSandbox
 from .view import TerminalView
 
@@ -17,12 +17,14 @@ from .view import TerminalView
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="self-heal", description="Ejecuta tests, propone una reparación con OpenAI y la valida automáticamente.")
     parser.add_argument("--test-command", default="pytest -q", help="Comando de test (default: pytest -q).")
-    parser.add_argument("--source", type=Path, help="Archivo a reparar; evita la detección automática.")
+    parser.add_argument("--source", type=Path, help="Archivo a reparar; admite múltiples rutas o evita la detección automática.")
     parser.add_argument("--model", default=os.getenv("OPENAI_MODEL", "gpt-5.6"), help="Modelo de OpenAI.")
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="Raíz del proyecto (default: directorio actual).")
-    parser.add_argument("--yes", action="store_true", help="Aplica un parche aprobado sin pedir confirmación.")
+    parser.add_argument("--yes", action="store_true", help="Aplica un parche aprobado sin pedir confirmación ni interrupción manual.")
     parser.add_argument("--sandbox", choices=["docker", "subprocess"], default="docker", help="Entorno aislado de validación (default: docker).")
     parser.add_argument("--sandbox-image", default="self-healing-sandbox:latest", help="Imagen Docker aislada para validar (default: self-healing-sandbox:latest).")
+    parser.add_argument("--commit", action="store_true", help="Genera un commit automático en Git con un mensaje descriptivo de la IA al completar con éxito.")
+    parser.add_argument("--rollback", nargs="?", const="all", help="Restaura archivos a partir de copias ocultas .bak. Opcional: ruta de archivo específico.")
     parser.add_argument("action", nargs="?", choices=["test"], help="Atajo: test <archivo_test.py> para ejecutar un test concreto.")
     parser.add_argument("test_file", nargs="?", type=Path, help="Archivo de test para el atajo `test`.")
     return parser
@@ -51,6 +53,28 @@ def source_from_test(test_file: Path) -> Path | None:
 def main() -> None:
     args = build_parser().parse_args()
     root = args.root.resolve()
+    
+    # Check if rollback command was invoked
+    if args.rollback:
+        if args.rollback == "all":
+            restored = restore_all_backups(root)
+            if restored:
+                print(f"✅ Rollback completado. Se restauraron los siguientes archivos:\n" + "\n".join(f"- {r}" for r in restored))
+            else:
+                print("ℹ No se encontraron archivos de respaldo (.bak) para restaurar.")
+        else:
+            target_path = Path(args.rollback)
+            if not target_path.is_absolute():
+                target_path = root / target_path
+            backup_path = target_path.parent / f".{target_path.name}.bak"
+            if backup_path.exists():
+                import shutil
+                shutil.move(str(backup_path), str(target_path))
+                print(f"✅ Rollback completado. Se restauró {target_path.relative_to(root)}")
+            else:
+                print(f"⛔ No se encontró archivo de respaldo para {args.rollback}")
+        raise SystemExit(0)
+
     if args.action and not args.test_file:
         raise SystemExit("Uso: python -m self_healing_agent.cli test ruta/al/test.py")
     if args.action == "test":
@@ -60,6 +84,7 @@ def main() -> None:
         args.test_command = f"pytest -q {shlex.quote(str(test_file))}"
         if args.source is None:
             args.source = source_from_test(test_file)
+            
     source = (root / args.source).resolve() if args.source and not args.source.is_absolute() else args.source
     
     view = TerminalView(root, args.yes)
@@ -89,11 +114,13 @@ def main() -> None:
             controller.repair_once(
                 args.test_command,
                 root,
-                source,
+                [source] if source else None,
                 approve=view.approve,
                 notify=view.notify,
                 display_evidence=view.display_failure_evidence,
-                notify_sandbox_fallback=view.display_sandbox_fallback
+                notify_sandbox_fallback=view.display_sandbox_fallback,
+                confirm_rollback=None if args.yes else view.ask_rollback,
+                git_commit=args.commit
             )
         )
     except RepairError as error:

@@ -30,7 +30,7 @@ class FailureEvidence:
     raw_output: str
     error_message: str
     frames: list[ParsedFrame]
-    target_file: Path | None
+    target_files: list[Path]
     language: str  # "python" or "go"
 
 
@@ -141,16 +141,17 @@ class StackTraceParser:
                         language="python"
                     ))
 
-        # Infer target file: last non-test file in frames
-        target_file = None
+        # Infer target files: all unique non-test files in frames (closest to error first)
+        target_files = []
+        seen = set()
         for frame in reversed(frames):
-            if "test" not in frame.file_path.name.lower():
-                target_file = frame.file_path
-                break
+            if "test" not in frame.file_path.name.lower() and frame.file_path not in seen:
+                target_files.append(frame.file_path)
+                seen.add(frame.file_path)
         
         # Fallback if frames exist but are all test files
-        if not target_file and frames:
-            target_file = frames[-1].file_path
+        if not target_files and frames:
+            target_files = [frames[-1].file_path]
 
         return FailureEvidence(
             passed=False,
@@ -158,7 +159,7 @@ class StackTraceParser:
             raw_output=test_output,
             error_message=error_message,
             frames=frames,
-            target_file=target_file,
+            target_files=target_files,
             language=language
         )
 
@@ -166,6 +167,6 @@ class StackTraceParser:
 def infer_source_file(test_output: str, root: Path) -> Path:
     """Extract the last local, non-test Python or Go source frame from test output."""
     evidence = StackTraceParser.parse(test_output, root)
-    if evidence.target_file:
-        return evidence.target_file
+    if evidence.target_files:
+        return evidence.target_files[0]
     raise ValueError("No pude detectar el archivo fuente. Usá --source ruta/al/archivo.")

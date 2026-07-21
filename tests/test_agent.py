@@ -57,7 +57,7 @@ def test_stack_trace_parser_python_exception(tmp_path: Path) -> None:
     assert evidence.frames[1].line_number == 2
     assert evidence.frames[1].function_name == "multiply"
     assert evidence.frames[1].code_line == "return left + right"
-    assert evidence.target_file == source_file
+    assert evidence.target_files[0] == source_file
 
 
 def test_local_subprocess_sandbox_success(tmp_path: Path) -> None:
@@ -182,8 +182,105 @@ func FetchAndAggregate(ctx context.Context, urls []string) (map[string]float64, 
         target_file = dest_dir / "aggregator.go"
         
         res_msg = controller.repair_once(cmd, dest_dir, target_file, approve=approve_callback)
-        assert "Reparación validada en sandbox y aplicada" in res_msg
+        assert "Reparación validada en sandbox" in res_msg
         
         content = target_file.read_text(encoding="utf-8")
         assert "go func() {" in content
+
+
+def test_stack_trace_parser_multi_file(tmp_path: Path) -> None:
+    file1 = tmp_path / "module1.py"
+    file1.write_text("def f(): g()\n", encoding="utf-8")
+    file2 = tmp_path / "module2.py"
+    file2.write_text("def g(): assert False\n", encoding="utf-8")
+    
+    output = (
+        f'File "{tmp_path / "test_run.py"}", line 4, in test_run\n'
+        f'    module1.f()\n'
+        f'  File "{file1}", line 2, in f\n'
+        f'    module2.g()\n'
+        f'  File "{file2}", line 2, in g\n'
+        f'    def g(): assert False\n'
+        f'AssertionError: assert False'
+    )
+    evidence = StackTraceParser.parse(output, tmp_path)
+    assert file2 in evidence.target_files
+    assert file1 in evidence.target_files
+    assert evidence.target_files[0] == file2
+    assert evidence.target_files[1] == file1
+
+
+def test_controller_rollback_triggers(tmp_path: Path) -> None:
+    from unittest.mock import patch, MagicMock
+    file1 = tmp_path / "app.py"
+    file1.write_text("v1\n", encoding="utf-8")
+    
+    mock_client = MagicMock()
+    mock_fixer_response = MagicMock()
+    mock_fixer_response.output_text = '{"app.py": "v2\\n"}'
+    mock_reviewer_response = MagicMock()
+    mock_reviewer_response.output_text = "APPROVE"
+    mock_client.responses.create.side_effect = [mock_fixer_response, mock_reviewer_response]
+    
+    from self_healing_agent.controller import RepairController
+    from self_healing_agent.sandbox import LocalSubprocessSandbox
+    
+    with patch("self_healing_agent.controller._client", return_value=mock_client):
+        controller = RepairController("gpt-5.6", LocalSubprocessSandbox(timeout=10))
+        
+        with patch.object(controller.sandbox, "validate", return_value=MagicMock(passed=True)):
+            with patch("self_healing_agent.controller.run_tests") as mock_run_tests:
+                mock_res_fail = MagicMock(passed=False, output='File "app.py", line 1', returncode=1)
+                mock_res_pass = MagicMock(passed=True, output='', returncode=0)
+                mock_run_tests.side_effect = [mock_res_fail, mock_res_pass]
+                
+                with pytest.raises(RepairError, match="Parche rechazado"):
+                    controller.repair_once(
+                        command="pytest",
+                        root=tmp_path,
+                        source_paths=[file1],
+                        approve=lambda t, o, p: True,
+                        confirm_rollback=lambda: False
+                    )
+                
+                assert file1.read_text(encoding="utf-8") == "v1\n"
+                assert not (tmp_path / ".app.py.bak").exists()
+
+
+def test_git_commit_integration(tmp_path: Path) -> None:
+    from unittest.mock import patch, MagicMock
+    file1 = tmp_path / "app.py"
+    file1.write_text("v1\n", encoding="utf-8")
+    
+    mock_client = MagicMock()
+    mock_fix = MagicMock(output_text='{"app.py": "v2\\n"}')
+    mock_rev = MagicMock(output_text="APPROVE")
+    mock_cmt = MagicMock(output_text="fix: patch applied")
+    mock_client.responses.create.side_effect = [mock_fix, mock_rev, mock_cmt]
+    
+    from self_healing_agent.controller import RepairController
+    from self_healing_agent.sandbox import LocalSubprocessSandbox
+    
+    with patch("self_healing_agent.controller._client", return_value=mock_client):
+        controller = RepairController("gpt-5.6", LocalSubprocessSandbox(timeout=10))
+        
+        with patch.object(controller.sandbox, "validate", return_value=MagicMock(passed=True)):
+            with patch("self_healing_agent.controller.run_tests") as mock_run:
+                mock_run.side_effect = [
+                    MagicMock(passed=False, output='File "app.py", line 1', returncode=1),
+                    MagicMock(passed=True, output="", returncode=0)
+                ]
+                
+                with patch("self_healing_agent.controller.subprocess.run") as mock_sub:
+                    res_msg = controller.repair_once(
+                        command="pytest",
+                        root=tmp_path,
+                        source_paths=[file1],
+                        approve=lambda t, o, p: True,
+                        git_commit=True
+                    )
+                    assert "confirmada en Git" in res_msg
+                    mock_sub.assert_any_call(["git", "add", str(file1.resolve())], cwd=tmp_path, check=True)
+                    mock_sub.assert_any_call(["git", "commit", "-m", "fix: patch applied"], cwd=tmp_path, check=True)
+
 

@@ -284,3 +284,78 @@ def test_git_commit_integration(tmp_path: Path) -> None:
                     mock_sub.assert_any_call(["git", "commit", "-m", "fix: patch applied"], cwd=tmp_path, check=True)
 
 
+def test_telemetry_roi_metrics(tmp_path: Path) -> None:
+    from self_healing_agent.telemetry import TelemetryManager
+    mgr = TelemetryManager(tmp_path)
+    
+    report = mgr.record_repair(
+        files=[tmp_path / "aggregator.go"],
+        language="go",
+        error_message="timeout: goroutines blocked in deadlock",
+        ai_time_seconds=12.5
+    )
+    assert report["total_fixes"] == 1
+    assert report["total_man_hours_saved_minutes"] == 60
+    
+    report2 = mgr.record_repair(
+        files=[tmp_path / "calc.py"],
+        language="python",
+        error_message="AssertionError: assert 5 == 6",
+        ai_time_seconds=3.1
+    )
+    assert report2["total_fixes"] == 2
+    assert report2["total_man_hours_saved_minutes"] == 80
+    assert len(report2["history"]) == 2
+    assert report2["history"][0]["language"] == "go"
+    assert report2["history"][1]["language"] == "python"
+
+
+def test_load_business_rules(tmp_path: Path) -> None:
+    from self_healing_agent.model import load_business_rules
+    assert load_business_rules(tmp_path) == ""
+    
+    rules_file = tmp_path / "architecture_rules.md"
+    rules_file.write_text("Rule 1: All operations must have 200ms timeout.", encoding="utf-8")
+    
+    assert "Rule 1" in load_business_rules(tmp_path)
+
+
+def test_ci_mode_headless_push(tmp_path: Path) -> None:
+    from unittest.mock import patch, MagicMock
+    from self_healing_agent.controller import RepairController
+    from self_healing_agent.sandbox import LocalSubprocessSandbox
+    
+    file1 = tmp_path / "app.py"
+    file1.write_text("v1\n", encoding="utf-8")
+    
+    mock_client = MagicMock()
+    mock_fix = MagicMock(output_text='{"app.py": "v2\\n"}')
+    mock_rev = MagicMock(output_text="APPROVE")
+    mock_cmt = MagicMock(output_text="fix: patch applied via CI")
+    mock_client.responses.create.side_effect = [mock_fix, mock_rev, mock_cmt]
+    
+    with patch("self_healing_agent.controller._client", return_value=mock_client):
+        controller = RepairController("gpt-5.6", LocalSubprocessSandbox(timeout=10))
+        
+        with patch.object(controller.sandbox, "validate", return_value=MagicMock(passed=True)):
+            with patch("self_healing_agent.controller.run_tests") as mock_run:
+                mock_run.side_effect = [
+                    MagicMock(passed=False, output='File "app.py", line 1', returncode=1),
+                    MagicMock(passed=True, output="", returncode=0)
+                ]
+                
+                with patch("self_healing_agent.controller.subprocess.run") as mock_sub:
+                    res_msg = controller.repair_once(
+                        command="pytest",
+                        root=tmp_path,
+                        source_paths=[file1],
+                        approve=None,
+                        git_commit=True,
+                        ci_push=True
+                    )
+                    assert "empujado a la rama remota" in res_msg
+                    mock_sub.assert_any_call(["git", "add", str(file1.resolve())], cwd=tmp_path, check=True)
+                    mock_sub.assert_any_call(["git", "commit", "-m", "fix: patch applied via CI"], cwd=tmp_path, check=True)
+                    mock_sub.assert_any_call(["git", "push", "origin", "HEAD"], cwd=tmp_path, check=True)
+
+

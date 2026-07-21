@@ -1,4 +1,4 @@
-"""Controller layer: coordinates evidence, Fixer, Reviewer, user approval and sandbox."""
+"""Controller layer: coordinates evidence, Fixer, Reviewer, user approval, sandbox and telemetry."""
 
 from __future__ import annotations
 
@@ -6,11 +6,13 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Callable
 
-from .model import StackTraceParser, FailureEvidence
+from .model import StackTraceParser, FailureEvidence, load_business_rules
 from .sandbox import Sandbox, SandboxError, run_tests
+from .telemetry import TelemetryManager
 
 
 FIXER_PROMPT = """You are a senior software engineer repairing defects in multiple files.
@@ -115,12 +117,24 @@ class RepairController:
                 f"--- END ---"
             )
         
+        # Load business rules context (RAG)
+        rules = load_business_rules(root)
+        rules_part = ""
+        if rules:
+            rules_part = (
+                f"\n--- BUSINESS & ARCHITECTURE RULES ---\n"
+                f"{rules}\n\n"
+                f"IMPORTANT: The proposed corrections MUST strictly follow all architectural and business rules listed above. "
+                f"Ensure timeouts, resource limits and design patterns are strictly satisfied.\n\n"
+            )
+
         sources_str = "\n\n".join(sources_list)
         prompt_input = (
             f"--- ERROR DETAILS ---\n"
             f"Language: {evidence.language}\n"
             f"Error Message: {evidence.error_message}\n\n"
             f"--- SOURCE FILES TO REPAIR ---\n{sources_str}\n\n"
+            f"{rules_part}"
             f"--- RAW FAILED TEST OUTPUT ---\n{evidence.raw_output}\n"
             f"--- END ---"
         )
@@ -140,9 +154,7 @@ class RepairController:
             data = json.loads(cleaned)
             fixes = {}
             for rel_path, content in data.items():
-                # Resolve relative path inside project
                 resolved_path = (root / rel_path).resolve()
-                # Find matching target
                 for t in targets:
                     if t.resolve() == resolved_path or t.name == Path(rel_path).name:
                         fixes[t] = content
@@ -151,12 +163,22 @@ class RepairController:
                 raise RepairError("El Fixer no devolvió cambios para los archivos objetivo en el JSON.")
             return fixes
         except Exception as exc:
-            # Fallback if output is raw code instead of JSON and we only have 1 target
             if len(targets) == 1:
                 return {targets[0]: cleaned}
             raise RepairError(f"Error decodificando la respuesta JSON del Fixer: {exc}\nRespuesta recibida:\n{cleaned}")
 
-    def _review(self, proposed_patches: dict[Path, str], evidence: FailureEvidence) -> str:
+    def _review(self, proposed_patches: dict[Path, str], evidence: FailureEvidence, root: Path) -> str:
+        # Load business rules context (RAG)
+        rules = load_business_rules(root)
+        rules_part = ""
+        if rules:
+            rules_part = (
+                f"\n--- BUSINESS & ARCHITECTURE RULES ---\n"
+                f"{rules}\n\n"
+                f"IMPORTANT: Verify that the proposed changes strictly comply with the architectural and business rules listed above. "
+                f"Reject the patches if timeouts are exceeded, constraints are violated or custom patterns are ignored.\n\n"
+            )
+
         review_inputs = []
         for path, proposed in proposed_patches.items():
             original = path.read_text(encoding="utf-8")
@@ -169,7 +191,8 @@ class RepairController:
 
         prompt_input = (
             f"--- PROPOSED PATCHES ---\n{review_str}\n"
-            f"--- ERROR MESSAGE ---\n{evidence.error_message}\n"
+            f"--- ERROR MESSAGE ---\n{evidence.error_message}\n\n"
+            f"{rules_part}"
             f"--- RAW TEST OUTPUT ---\n{evidence.raw_output}\n"
             f"--- END ---"
         )
@@ -212,8 +235,13 @@ class RepairController:
         notify_sandbox_fallback: Callable[[], None] | None = None,
         confirm_rollback: Callable[[], bool] | None = None,
         git_commit: bool = False,
+        display_roi: Callable[[dict], None] | None = None,
+        ci_push: bool = False,
     ) -> str:
         event = notify or (lambda _: None)
+        
+        # Start timing for ROI telemetries
+        start_time = time.time()
         
         # Handle list vs single path compatibility
         targets = []
@@ -254,7 +282,7 @@ class RepairController:
         proposed_patches = self._fix(targets, evidence, root)
         
         event("Controlador: Reviewer Agent auditando la propuesta en bloque…")
-        verdict = self._review(proposed_patches, evidence)
+        verdict = self._review(proposed_patches, evidence, root)
         if verdict.upper() != "APPROVE":
             raise RepairError(f"El Reviewer rechazó la propuesta:\n{verdict}")
         
@@ -303,6 +331,14 @@ class RepairController:
             self.rollback_backups(backups)
             raise exc
 
+        # Calculate final ROI metrics
+        duration_seconds = time.time() - start_time
+        telemetry = TelemetryManager(root)
+        roi_report = telemetry.record_repair(targets, evidence.language, evidence.error_message, duration_seconds)
+        
+        if display_roi:
+            display_roi(roi_report)
+
         # Git commit integration if requested
         if git_commit:
             commit_msg = self._generate_commit_message(proposed_patches)
@@ -311,8 +347,15 @@ class RepairController:
                 for target in proposed_patches.keys():
                     subprocess.run(["git", "add", str(target)], cwd=root, check=True)
                 subprocess.run(["git", "commit", "-m", commit_msg], cwd=root, check=True)
+                
+                # Push back in CI/CD mode
+                if ci_push:
+                    event("Git: empujando cambios al repositorio remoto (CI Mode)…")
+                    subprocess.run(["git", "push", "origin", "HEAD"], cwd=root, check=True)
+                    return f"✅ Parche validado en sandbox, aplicado, commit local creado y empujado a la rama remota: '{commit_msg}'."
+                
                 return f"✅ Reparación validada en sandbox, aplicada localmente y confirmada en Git: '{commit_msg}'."
             except Exception as git_err:
-                return f"✅ Reparación aplicada y validada, pero falló el commit en Git: {git_err}."
+                return f"✅ Reparación aplicada y validada, pero falló la operación de Git: {git_err}."
 
         return f"✅ Reparación validada en sandbox y aplicada localmente a {targets_display}."

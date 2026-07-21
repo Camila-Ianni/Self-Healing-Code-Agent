@@ -170,3 +170,17 @@ def infer_source_file(test_output: str, root: Path) -> Path:
     if evidence.target_files:
         return evidence.target_files[0]
     raise ValueError("No pude detectar el archivo fuente. Usá --source ruta/al/archivo.")
+
+
+def load_business_rules(root: Path) -> str:
+    """Scan root directory for architecture and business logic rules files to provide context."""
+    rules_files = ["architecture_rules.md", "business_logic.txt", "rules.md", ".rules.md"]
+    content_list = []
+    for filename in rules_files:
+        p = root / filename
+        if p.exists() and p.is_file():
+            try:
+                content_list.append(f"--- RULES FROM {filename} ---\n{p.read_text(encoding='utf-8')}")
+            except Exception:
+                pass
+    return "\n\n".join(content_list).strip()

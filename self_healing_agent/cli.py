@@ -24,6 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sandbox", choices=["docker", "subprocess"], default="docker", help="Entorno aislado de validación (default: docker).")
     parser.add_argument("--sandbox-image", default="self-healing-sandbox:latest", help="Imagen Docker aislada para validar (default: self-healing-sandbox:latest).")
     parser.add_argument("--commit", action="store_true", help="Genera un commit automático en Git con un mensaje descriptivo de la IA al completar con éxito.")
+    parser.add_argument("--ci-mode", action="store_true", help="Modo CI/CD headless: corre de forma autónoma, valida en sandbox, crea commit y empuja cambios a remoto.")
     parser.add_argument("--rollback", nargs="?", const="all", help="Restaura archivos a partir de copias ocultas .bak. Opcional: ruta de archivo específico.")
     parser.add_argument("action", nargs="?", choices=["test"], help="Atajo: test <archivo_test.py> para ejecutar un test concreto.")
     parser.add_argument("test_file", nargs="?", type=Path, help="Archivo de test para el atajo `test`.")
@@ -75,6 +76,11 @@ def main() -> None:
                 print(f"⛔ No se encontró archivo de respaldo para {args.rollback}")
         raise SystemExit(0)
 
+    # Force yes and commit flags if ci_mode is set
+    if args.ci_mode:
+        args.yes = True
+        args.commit = True
+
     if args.action and not args.test_file:
         raise SystemExit("Uso: python -m self_healing_agent.cli test ruta/al/test.py")
     if args.action == "test":
@@ -115,12 +121,14 @@ def main() -> None:
                 args.test_command,
                 root,
                 [source] if source else None,
-                approve=view.approve,
+                approve=None if args.ci_mode else view.approve,
                 notify=view.notify,
                 display_evidence=view.display_failure_evidence,
                 notify_sandbox_fallback=view.display_sandbox_fallback,
                 confirm_rollback=None if args.yes else view.ask_rollback,
-                git_commit=args.commit
+                git_commit=args.commit,
+                display_roi=view.display_roi,
+                ci_push=args.ci_mode
             )
         )
     except RepairError as error:

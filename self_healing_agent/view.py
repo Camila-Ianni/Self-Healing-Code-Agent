@@ -174,6 +174,30 @@ class TerminalView:
             self.status.stop()
             self.status_active = False
 
+    def display_roi(self, report: dict) -> None:
+        self.stop()
+        self.console.print()
+        
+        last_record = report["history"][-1] if report["history"] else {}
+        ai_time = last_record.get("ai_time_seconds", 0.0)
+        human_saved = last_record.get("human_time_saved_minutes", 0)
+        total_saved_hours = report.get("total_man_hours_saved_minutes", 0) / 60.0
+        
+        roi_panel = Panel(
+            f"[bold green]◈ CURRENT RUN DIAGNOSTICS:[/bold green]\n"
+            f"  • AI Healing Cycle Duration : [cyan]{ai_time:.2f} seconds[/cyan]\n"
+            f"  • Avoided Manual Debugging  : [yellow]{human_saved} minutes[/yellow]\n\n"
+            f"[bold green]◈ TELEMETRY METRIC ACCUMULATED:[/bold green]\n"
+            f"  • Total Operations Resolved : [cyan]{report.get('total_fixes', 0)} repairs[/cyan]\n"
+            f"  • Total Man-Hours Preserved : [yellow]{total_saved_hours:.2f} engineering hours[/yellow]",
+            title="[bold green]❖ TELEMETRY LOG: ROI & METRICS DASHBOARD ❖[/bold green]",
+            border_style="bold green",
+            box=box.DOUBLE,
+            expand=False
+        )
+        self.console.print(roi_panel)
+        self.console.print()
+
     def success(self, message: str) -> None:
         self.stop()
         self.console.print(Panel(

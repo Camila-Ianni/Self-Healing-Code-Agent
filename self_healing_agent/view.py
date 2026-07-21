@@ -1,4 +1,4 @@
-"""View layer: Rich terminal presentation, status spinner, diff and confirmation with Stark UI."""
+"""View layer: Rich terminal presentation, status spinner, diff and confirmation UI."""
 
 from __future__ import annotations
 
@@ -20,21 +20,21 @@ class TerminalView:
         self.root = root
         self.assume_yes = assume_yes
         self.console = Console()
-        self.status = self.console.status("[bold cyan]❖ [SYSTEM] Initializing Stark-Repair diagnosis…[/bold cyan]", spinner="dots12")
+        self.status = self.console.status("[bold cyan]❖ [SYSTEM] Initializing diagnosis…[/bold cyan]", spinner="dots12")
         self.status_active = False
         self.print_header()
 
     def print_header(self) -> None:
         """Prints a high-tech header at application startup."""
         self.console.print(Panel(
-            "[bold neon_cyan]⚡ ❖ STARK-REPAIR HEALING NETWORK v1.1.0 ❖ ⚡[/bold neon_cyan]\n"
+            "[bold neon_cyan]⚡ ❖ HEALING NETWORK v1.1.0 ❖ ⚡[/bold neon_cyan]\n"
             "[dim cyan]AUTOMATED SOURCE DIAGNOSIS & NEURAL CODE PATCHING FACILITY[/dim cyan]",
             border_style="cyan",
             box=box.DOUBLE
         ))
 
     def notify(self, message: str) -> None:
-        # Stark styled status updates
+        # Status updates
         self.status.update(f"[bold cyan]◈ [DIAGNOSTIC] {message}…[/bold cyan]")
         if not self.status_active:
             self.status.start()
@@ -60,7 +60,7 @@ class TerminalView:
         error_panel = Panel(
             f"[bold white]EXCEPTION METRIC:[/bold white] [bright_red]{evidence.error_message}[/bright_red]\n\n"
             f"[bold white]TARGET SOURCE COMPONENT(S):[/bold white] [yellow]{target_display}[/yellow]\n"
-            f"[bold white]DIAGNOSTIC ENGINE:[/bold white] [magenta]STARK-PARSER v2.4 (Deep Frame Scanner)[/magenta]",
+            f"[bold white]DIAGNOSTIC ENGINE:[/bold white] [magenta]PARSER v2.4 (Deep Frame Scanner)[/magenta]",
             title=f"[bold bright_red]❖ EXCEPTION LOG ({evidence.language.upper()}) ❖[/bold bright_red]",
             border_style="red",
             box=box.ROUNDED,
@@ -129,7 +129,7 @@ class TerminalView:
             rel_target = target.name
 
         self.console.print(Panel(
-            f"[bold green]✔ STARK-FIXER: PATCH COMPILED SUCCESSFULLY[/bold green]\n"
+            f"[bold green]✔ PATCH COMPILED SUCCESSFULLY[/bold green]\n"
             f"COMPONENT: [cyan]{rel_target}[/cyan]\n"
             f"INTEGRITY AUDIT: [bold green]PASSED[/bold green] (Approved by Reviewer Agent)", 
             title="❖ PROPOSED SYSTEM RECONSTRUCTION ❖",
@@ -203,7 +203,7 @@ class TerminalView:
         self.console.print(Panel(
             f"[bold green]🚀 PATCH INJECTED & VALIDATED IN ISOLATION WORKSPACE[/bold green]\n"
             f"[white]{message}[/white]",
-            title="❖ STARK-REPAIR PROCESS SUCCESSFUL ❖",
+            title="❖ HEALING PROCESS SUCCESSFUL ❖",
             border_style="bold green",
             box=box.DOUBLE
         ))

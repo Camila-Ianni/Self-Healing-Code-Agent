@@ -1,6 +1,12 @@
 # Self-Healing Code Agent
 
+> 🎥 **Video demo (< 3 min):** `PEGAR AQUÍ EL ENLACE PÚBLICO DE YOUTUBE ANTES DE ENTREGAR`
+>
+> 🆔 **Codex Session ID (/feedback):** `PEGAR AQUÍ EL SESSION ID ANTES DE ENTREGAR`
+
 CLI de Python que convierte un test fallido en un ciclo de reparación verificable: ejecuta los tests, captura el stack trace, localiza el archivo fuente, solicita una corrección a OpenAI y **solo conserva el cambio si los tests pasan**. Si el intento falla, restaura el archivo original.
+
+**Cómo aceleró Codex el proyecto:** Codex generó el esqueleto de la CLI, separó el motor de reparación de la interfaz, creó la demo y ayudó a implementar el ciclo de validación con rollback. Así pude enfocar el tiempo en el flujo agentic y en una demo que un juez puede ejecutar de inmediato.
 
 ## Demo en 30 segundos
 
@@ -14,8 +20,8 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e '.[dev]'
 export OPENAI_API_KEY="tu_clave"
 
-# Desde la raíz del repositorio:
-self-heal --test-command "pytest -q example" --source example/calculator.py
+# Comando recomendado para jueces (no necesitan conocer opciones):
+python -m self_healing_agent.cli test ./example/test_calculator.py
 ```
 
 Salida esperada:
@@ -74,8 +80,6 @@ Los tests propios validan la captura de fallos y la localización segura del arc
 
 Codex aceleró la creación del esqueleto de la CLI, la suite de pruebas, el flujo de rollback y esta documentación. GPT-5.6 es el motor de razonamiento dentro del producto: recibe el código y la evidencia concreta del test fallido, propone una corrección mínima y el agente la valida de forma automática.
 
-**Codex Session ID:** `PENDIENTE — ejecutá /feedback en Codex y pegá aquí el Session ID antes de la entrega.`
-
 ## Video
 
-Pendiente de agregar el enlace público de YouTube (menos de 3 minutos) antes de la entrega.
+Pegá el enlace público de YouTube al comienzo de este README antes de entregar.

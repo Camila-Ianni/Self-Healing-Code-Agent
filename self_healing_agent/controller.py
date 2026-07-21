@@ -469,7 +469,15 @@ class RepairController:
                     default_path = str(Path.home() / "Desktop" / default_name)
                     selected_path_str = ask_report_path(default_path)
                     if selected_path_str:
-                        selected_path = Path(os.path.expanduser(selected_path_str))
+                        clean_str = selected_path_str.strip().strip("/").strip("\\")
+                        if clean_str.lower() == "desktop":
+                            selected_path = Path.home() / "Desktop" / default_name
+                        else:
+                            selected_path = Path(os.path.expanduser(selected_path_str))
+                        
+                        if selected_path.is_dir():
+                            selected_path = selected_path / default_name
+                            
                         from .telemetry import generate_executive_report
                         generate_executive_report(
                             root=root,

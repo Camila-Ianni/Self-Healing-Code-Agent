@@ -1,6 +1,6 @@
 # Self-Healing Code Agent
 
-> 🎥 **Video demo (< 3 min):** `PASTE PUBLIC YOUTUBE LINK HERE BEFORE SUBMITTING`
+> 🎥 **Video demo (< 3 min):** [YouTube Link](https://youtu.be/PC4Kj1pR9f0)
 >
 > 🆔 **Codex Session ID (/feedback):** `019f824e-0a6a-7530-a6a1-4134a4093fd1`
 

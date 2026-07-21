@@ -1,6 +1,6 @@
 {
-  "total_fixes": 3,
-  "total_man_hours_saved_minutes": 140,
+  "total_fixes": 6,
+  "total_man_hours_saved_minutes": 320,
   "history": [
     {
       "timestamp": "2026-07-21T12:05:37.187425",
@@ -30,6 +30,36 @@
       "language": "go",
       "error_message": "Go test failure or deadlock timeout",
       "ai_time_seconds": 43.36,
+      "human_time_saved_minutes": 60
+    },
+    {
+      "timestamp": "2026-07-21T12:59:30.340412",
+      "files": [
+        "example/go_market_aggregator/aggregator.go"
+      ],
+      "language": "go",
+      "error_message": "Go test failure or deadlock timeout",
+      "ai_time_seconds": 27.7,
+      "human_time_saved_minutes": 60
+    },
+    {
+      "timestamp": "2026-07-21T15:23:18.255867",
+      "files": [
+        "example/go_market_aggregator/aggregator.go"
+      ],
+      "language": "go",
+      "error_message": "Go test failure or deadlock timeout",
+      "ai_time_seconds": 36.64,
+      "human_time_saved_minutes": 60
+    },
+    {
+      "timestamp": "2026-07-21T15:30:03.369621",
+      "files": [
+        "example/go_market_aggregator/aggregator.go"
+      ],
+      "language": "go",
+      "error_message": "Go test failure or deadlock timeout",
+      "ai_time_seconds": 73.73,
       "human_time_saved_minutes": 60
     }
   ]

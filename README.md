@@ -36,12 +36,26 @@ Luego `pytest -q example` queda en verde. Para repetir la demo, vuelve a cambiar
 ## Cómo funciona
 
 ```text
-test command → stack trace → archivo fuente → GPT-5.6 → parche temporal → tests
-                                                                  ├─ pasan: conservar
-                                                                  └─ fallan: rollback
+test command → stack trace → Fixer Agent → Reviewer Agent → diff + confirmación → tests
+                                                         ├─ rechazo: no escribir nada
+                                                         └─ aprobado: parche temporal → pasan: conservar / fallan: rollback
 ```
 
-El comando acepta `--source` para una reparación determinista. Sin ese argumento, intenta inferir un archivo Python local y que no sea un test desde el traceback. Los backups se guardan en `.self-healing-backups/` y no se versionan.
+El **Fixer Agent** propone el archivo completo corregido. Antes de cualquier escritura, el **Reviewer Agent** analiza esa propuesta buscando riesgos de seguridad, loops infinitos, regresiones de rendimiento, data races y deadlocks. Solo un veredicto `APPROVE` habilita el diff coloreado y la confirmación del usuario. Los backups se guardan en `.self-healing-backups/` y no se versionan.
+
+Usá `--yes` para aceptar el parche aprobado sin interacción, útil para automatizaciones.
+
+## Demo backend concurrente (Go)
+
+Además de la calculadora, `example/go_backend/` reproduce una condición de carrera típica de un contador de requests de servidor. El test usa el detector de carreras de Go:
+
+```bash
+self-heal \
+  --test-command "cd example/go_backend && go test -race ./..." \
+  --source example/go_backend/counter.go
+```
+
+El Fixer debe reemplazar el acceso concurrente inseguro por sincronización correcta; el Reviewer revisa explícitamente race conditions y deadlocks antes de mostrar el diff. Esta demo requiere Go 1.22+ y `OPENAI_API_KEY`.
 
 ## Configuración
 
@@ -73,6 +87,8 @@ Los tests propios validan la captura de fallos y la localización segura del arc
 ## Seguridad y límites
 
 - El modelo nunca recibe permisos de shell: devuelve solamente el contenido completo del archivo seleccionado.
+- Dos llamadas independientes separan la propuesta (Fixer) de la aprobación de seguridad (Reviewer).
+- El diff se muestra y requiere confirmación antes de escribir; `--yes` es la única excepción explícita.
 - El archivo solo queda modificado tras una nueva ejecución exitosa de los tests.
 - La versión actual está enfocada en Python y en reparar un archivo por ciclo; no sustituye revisión humana para cambios de producción.
 

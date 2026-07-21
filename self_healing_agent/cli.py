@@ -4,17 +4,14 @@ from __future__ import annotations
 
 import argparse
 import ast
-from difflib import unified_diff
 import os
 import shlex
+import subprocess
 from pathlib import Path
 
-from rich.console import Console
-from rich.panel import Panel
-from rich.prompt import Confirm
-from rich.syntax import Syntax
-
-from .agent import RepairError, repair_once
+from .controller import RepairController, RepairError
+from .sandbox import DockerSandbox, LocalSubprocessSandbox
+from .view import TerminalView
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,6 +21,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--model", default=os.getenv("OPENAI_MODEL", "gpt-5.6"), help="Modelo de OpenAI.")
     parser.add_argument("--root", type=Path, default=Path.cwd(), help="Raíz del proyecto (default: directorio actual).")
     parser.add_argument("--yes", action="store_true", help="Aplica un parche aprobado sin pedir confirmación.")
+    parser.add_argument("--sandbox", choices=["docker", "subprocess"], default="docker", help="Entorno aislado de validación (default: docker).")
+    parser.add_argument("--sandbox-image", default="self-healing-sandbox:latest", help="Imagen Docker aislada para validar (default: self-healing-sandbox:latest).")
     parser.add_argument("action", nargs="?", choices=["test"], help="Atajo: test <archivo_test.py> para ejecutar un test concreto.")
     parser.add_argument("test_file", nargs="?", type=Path, help="Archivo de test para el atajo `test`.")
     return parser
@@ -50,9 +49,6 @@ def source_from_test(test_file: Path) -> Path | None:
 
 
 def main() -> None:
-    console = Console()
-    status = console.status("[bold cyan]🧠 Preparando agente…[/bold cyan]", spinner="dots12")
-    status_active = False
     args = build_parser().parse_args()
     root = args.root.resolve()
     if args.action and not args.test_file:
@@ -65,33 +61,43 @@ def main() -> None:
         if args.source is None:
             args.source = source_from_test(test_file)
     source = (root / args.source).resolve() if args.source and not args.source.is_absolute() else args.source
+    
+    view = TerminalView(root, args.yes)
+    
+    # Initialize sandbox with automatic fallback to subprocess if Docker is not available
+    sandbox = None
+    if args.sandbox == "docker":
+        docker_available = True
+        try:
+            res = subprocess.run(["docker", "info"], capture_output=True, check=False)
+            if res.returncode != 0:
+                docker_available = False
+        except FileNotFoundError:
+            docker_available = False
+            
+        if docker_available:
+            sandbox = DockerSandbox(args.sandbox_image)
+        else:
+            sandbox = LocalSubprocessSandbox()
+            sandbox.fallback_triggered = True
+    else:
+        sandbox = LocalSubprocessSandbox()
 
-    def notify(message: str) -> None:
-        nonlocal status_active
-        status.update(f"[bold cyan]🧠 {message}[/bold cyan]")
-        if not status_active:
-            status.start()
-            status_active = True
-
-    def approve(target: Path, original: str, proposed: str) -> bool:
-        nonlocal status_active
-        if status_active:
-            status.stop()
-            status_active = False
-        console.print(Panel.fit(f"[bold green]✓ Reviewer Agent aprobó[/bold green]\n{target.relative_to(root)}", title="Propuesta lista"))
-        diff = "\n".join(unified_diff(original.splitlines(), proposed.splitlines(), fromfile="original", tofile="propuesta", lineterm=""))
-        console.print(Syntax(diff or "(sin cambios)", "diff", theme="monokai", line_numbers=True))
-        return args.yes or Confirm.ask("¿Aplicar este parche?", default=True, console=console)
-
+    controller = RepairController(args.model, sandbox)
     try:
-        result = repair_once(args.test_command, root, source, args.model, approve=approve, notify=notify)
-        if status_active:
-            status.stop()
-        console.print(result)
+        view.success(
+            controller.repair_once(
+                args.test_command,
+                root,
+                source,
+                approve=view.approve,
+                notify=view.notify,
+                display_evidence=view.display_failure_evidence,
+                notify_sandbox_fallback=view.display_sandbox_fallback
+            )
+        )
     except RepairError as error:
-        if status_active:
-            status.stop()
-        console.print(f"\n[bold red]⛔ Reparación detenida:[/bold red] {error}")
+        view.error(str(error))
         raise SystemExit(1) from error
 
 

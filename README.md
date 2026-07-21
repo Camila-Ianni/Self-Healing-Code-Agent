@@ -41,6 +41,13 @@ test command → stack trace → Fixer Agent → Reviewer Agent → diff + confi
                                                          └─ aprobado: parche temporal → pasan: conservar / fallan: rollback
 ```
 
+La arquitectura sigue una separación estricta Modelo–Controlador–Vista:
+
+- `model.py`: evidencia inmutable del test y parseo profundo de stack traces Python/Go.
+- `controller.py`: orquesta Fixer, Reviewer, aprobación humana y persistencia.
+- `view.py`: spinner Rich, diff coloreado y confirmación en terminal.
+- `sandbox.py`: copia temporal + contenedor Docker restringido para la validación.
+
 El **Fixer Agent** propone el archivo completo corregido. Antes de cualquier escritura, el **Reviewer Agent** analiza esa propuesta buscando riesgos de seguridad, loops infinitos, regresiones de rendimiento, data races y deadlocks. Solo un veredicto `APPROVE` habilita el diff coloreado y la confirmación del usuario. Los backups se guardan en `.self-healing-backups/` y no se versionan.
 
 Usá `--yes` para aceptar el parche aprobado sin interacción, útil para automatizaciones.
@@ -56,6 +63,30 @@ self-heal \
 ```
 
 El Fixer debe reemplazar el acceso concurrente inseguro por sincronización correcta; el Reviewer revisa explícitamente race conditions y deadlocks antes de mostrar el diff. Esta demo requiere Go 1.22+ y `OPENAI_API_KEY`.
+
+### Integración asíncrona de mercados
+
+`example/go_market_aggregator/` simula respuestas JSON de plataformas de mercados predictivos. El bug bloquea goroutines contra un channel sin buffer mientras el `sync.WaitGroup` espera que terminen; el test expone un timeout con el diagnóstico exacto.
+
+```bash
+self-heal \
+  --test-command "cd example/go_market_aggregator && go test ./..." \
+  --source example/go_market_aggregator/aggregator.go
+```
+
+La reparación esperada coordina correctamente `channels` y `sync.WaitGroup`, y conserva la deserialización JSON de los feeds concurrentes.
+
+## Sandbox de validación
+
+Antes de sobrescribir un archivo local, la propuesta aprobada se copia a un directorio temporal y se prueba dentro de un contenedor Docker efímero. Ese contenedor ejecuta con red deshabilitada, sin capacidades Linux, `no-new-privileges`, límite de 768 MB, dos CPUs y hasta 256 procesos. El único volumen montado es la copia temporal, nunca tu working tree.
+
+Construí la imagen una sola vez:
+
+```bash
+docker build -t self-healing-sandbox:latest -f Dockerfile.sandbox .
+```
+
+Sin esa imagen, la CLI rechaza el parche y no escribe nada. Podés proveer otra imagen compatible con `--sandbox-image nombre:tag`.
 
 ## Configuración
 
@@ -89,6 +120,7 @@ Los tests propios validan la captura de fallos y la localización segura del arc
 - El modelo nunca recibe permisos de shell: devuelve solamente el contenido completo del archivo seleccionado.
 - Dos llamadas independientes separan la propuesta (Fixer) de la aprobación de seguridad (Reviewer).
 - El diff se muestra y requiere confirmación antes de escribir; `--yes` es la única excepción explícita.
+- El código propuesto se ejecuta solo en el sandbox Docker antes de persistirlo localmente.
 - El archivo solo queda modificado tras una nueva ejecución exitosa de los tests.
 - La versión actual está enfocada en Python y en reparar un archivo por ciclo; no sustituye revisión humana para cambios de producción.
 

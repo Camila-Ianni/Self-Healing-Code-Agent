@@ -33,6 +33,16 @@ Salida esperada:
 
 Luego `pytest -q example` queda en verde. Para repetir la demo, vuelve a cambiar `return left * right` por `return left + right`.
 
+## Business Value & ROI
+
+El Self-Healing Code Agent no es solo una herramienta de conveniencia técnica; es una solución de nivel empresarial diseñada para optimizar los procesos operativos de desarrollo y sistemas.
+
+### 📈 Impacto en el Negocio y ROI
+* **Reducción Drástica del MTTR (Mean Time to Repair)**: Automatiza el análisis y corrección de regresiones en pipelines de integración continua en cuestión de segundos, disminuyendo notablemente el tiempo de inactividad (downtime) de los servicios de producción.
+* **Ahorro Directo en Costos de Ingeniería (Horas-Hombre)**: Libera a los desarrolladores del desgaste de depurar errores triviales, sintácticos o fallos de concurrencia típicos (deadlocks, condiciones de carrera). Esto se traduce en un ahorro directo de miles de dólares en horas de desarrollo dedicadas a debugging mecánico.
+* **Mitigación del Riesgo Operativo (Seguridad en Sandbox)**: Al forzar la ejecución en entornos aislados (Docker o subprocess con límites de recursos POSIX), se evita que fallos descontrolados afecten la infraestructura compartida de integración.
+* **Auditoría Dual Automática**: La combinación de un Fixer con un Reviewer independiente previene la propagación de bugs de rendimiento o vulnerabilidades de seguridad antes de que el parche sea aprobado.
+
 ## Cómo funciona
 
 ```text

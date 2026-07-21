@@ -1,10 +1,11 @@
-"""View layer: Rich terminal presentation, status spinner, diff and confirmation."""
+"""View layer: Rich terminal presentation, status spinner, diff and confirmation with Stark UI."""
 
 from __future__ import annotations
 
 from difflib import unified_diff
 from pathlib import Path
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm
@@ -19,11 +20,22 @@ class TerminalView:
         self.root = root
         self.assume_yes = assume_yes
         self.console = Console()
-        self.status = self.console.status("[bold cyan]🧠 Preparando agente…[/bold cyan]", spinner="dots12")
+        self.status = self.console.status("[bold cyan]❖ [SYSTEM] Initializing Stark-Repair diagnosis…[/bold cyan]", spinner="dots12")
         self.status_active = False
+        self.print_header()
+
+    def print_header(self) -> None:
+        """Prints a high-tech header at application startup."""
+        self.console.print(Panel(
+            "[bold neon_cyan]⚡ ❖ STARK-REPAIR HEALING NETWORK v1.1.0 ❖ ⚡[/bold neon_cyan]\n"
+            "[dim cyan]AUTOMATED SOURCE DIAGNOSIS & NEURAL CODE PATCHING FACILITY[/dim cyan]",
+            border_style="cyan",
+            box=box.DOUBLE
+        ))
 
     def notify(self, message: str) -> None:
-        self.status.update(f"[bold cyan]🧠 {message}[/bold cyan]")
+        # Stark styled status updates
+        self.status.update(f"[bold cyan]◈ [DIAGNOSTIC] {message}…[/bold cyan]")
         if not self.status_active:
             self.status.start()
             self.status_active = True
@@ -32,8 +44,9 @@ class TerminalView:
         self.stop()
         self.console.print()
         
-        # Error summary panel
-        title = f"[bold red]❌ Test Fallido ({evidence.language.upper()})[/bold red]"
+        # High contrast diagnostic failure header
+        self.console.print("[bold red]⚡ CRITICAL INTEGRITY EXCEPTION DETECTED ⚡[/bold red]")
+        
         target_display = "Desconocido"
         if evidence.target_file:
             try:
@@ -42,23 +55,30 @@ class TerminalView:
                 target_display = str(evidence.target_file.name)
 
         error_panel = Panel(
-            f"[bold white]Mensaje de error:[/bold white]\n[red]{evidence.error_message}[/red]\n\n"
-            f"[bold white]Archivo fuente sugerido:[/bold white]\n"
-            f"[yellow]{target_display}[/yellow]",
-            title=title,
+            f"[bold white]EXCEPTION METRIC:[/bold white] [bright_red]{evidence.error_message}[/bright_red]\n\n"
+            f"[bold white]TARGET SOURCE COMPONENT:[/bold white] [yellow]{target_display}[/yellow]\n"
+            f"[bold white]DIAGNOSTIC ENGINE:[/bold white] [magenta]STARK-PARSER v2.4 (Deep Frame Scanner)[/magenta]",
+            title=f"[bold bright_red]❖ EXCEPTION LOG ({evidence.language.upper()}) ❖[/bold bright_red]",
             border_style="red",
+            box=box.ROUNDED,
             expand=False
         )
         self.console.print(error_panel)
 
-        # Stack trace table
+        # Telemetry frames table
         if evidence.frames:
-            table = Table(title="[bold dim]Stack Trace Detectado[/bold dim]", show_header=True, header_style="bold magenta", expand=True)
-            table.add_column("#", style="dim", width=4)
-            table.add_column("Archivo", style="cyan")
-            table.add_column("Línea", style="green", justify="right")
-            table.add_column("Función", style="yellow")
-            table.add_column("Código", style="white")
+            table = Table(
+                title="[bold cyan]❖ TELEMETRY: PARSED STACK TRACE FRAMES ❖[/bold cyan]", 
+                show_header=True, 
+                header_style="bold magenta", 
+                expand=True,
+                box=box.MINIMAL_DOUBLE_HEAD
+            )
+            table.add_column("IDX", style="dim cyan", width=6)
+            table.add_column("SOURCE MODULE", style="cyan")
+            table.add_column("LINE", style="green", justify="right")
+            table.add_column("SCOPE/FUNCTION", style="yellow")
+            table.add_column("CONTEXT / CODE FRAME", style="white")
 
             for idx, frame in enumerate(evidence.frames):
                 try:
@@ -66,11 +86,16 @@ class TerminalView:
                 except ValueError:
                     rel_path = frame.file_path.name
                 
-                # Highlight the target file we will modify
-                style = "bold yellow" if frame.file_path == evidence.target_file else ""
+                # Highlight the target file we will modify in high-contrast neon yellow
+                if frame.file_path == evidence.target_file:
+                    style = "bold yellow"
+                    idx_str = f"◈ {idx + 1}"
+                else:
+                    style = "dim white"
+                    idx_str = str(idx + 1)
                 
                 table.add_row(
-                    str(idx + 1),
+                    idx_str,
                     f"[{style}]{rel_path}[/{style}]",
                     f"[{style}]{frame.line_number}[/{style}]",
                     f"[{style}]{frame.function_name or '-'}[/{style}]",
@@ -82,11 +107,12 @@ class TerminalView:
     def display_sandbox_fallback(self) -> None:
         self.stop()
         warning_panel = Panel(
-            "[bold yellow]⚠️ Docker no disponible o no corriendo.[/bold yellow]\n"
-            "Realizando fallback automático a [bold cyan]LocalSubprocessSandbox[/bold cyan] seguro\n"
-            "con límites de recursos POSIX (`resource.setrlimit`).",
-            title="[bold yellow]Sandbox Fallback[/bold yellow]",
-            border_style="yellow",
+            "[bold yellow]⚡ DOCKER ENGINE RETRIEVAL FAIL: CONTAINER ENVIRONMENT UNAVAILABLE[/bold yellow]\n"
+            "Initiating automatic fallback process to [bold cyan]LocalSubprocessSandbox[/bold cyan] module...\n"
+            "System isolation parameters: [bold green]ACTIVE[/bold green] (POSIX limits enforced)",
+            title="❖ SECURE SANDBOX DEVIATION WARNING ❖",
+            border_style="bold yellow",
+            box=box.ROUNDED,
             expand=False
         )
         self.console.print(warning_panel)
@@ -99,24 +125,34 @@ class TerminalView:
         except ValueError:
             rel_target = target.name
 
-        self.console.print(Panel.fit(
-            f"[bold green]✓ Reviewer Agent aprobó la propuesta[/bold green]\n"
-            f"Archivo: [cyan]{rel_target}[/cyan]", 
-            title="Propuesta Lista para Aplicar",
-            border_style="green"
+        self.console.print(Panel(
+            f"[bold green]✔ STARK-FIXER: PATCH COMPILED SUCCESSFULLY[/bold green]\n"
+            f"COMPONENT: [cyan]{rel_target}[/cyan]\n"
+            f"INTEGRITY AUDIT: [bold green]PASSED[/bold green] (Approved by Reviewer Agent)", 
+            title="❖ PROPOSED SYSTEM RECONSTRUCTION ❖",
+            border_style="green",
+            box=box.ROUNDED
         ))
         
         diff = "\n".join(unified_diff(
             original.splitlines(), 
             proposed.splitlines(), 
             fromfile=f"original/{target.name}", 
-            tofile=f"propuesta/{target.name}", 
+            tofile=f"reconstructed/{target.name}", 
             lineterm=""
         ))
-        self.console.print(Syntax(diff or "(sin cambios)", "diff", theme="monokai", line_numbers=True))
+        
+        # Display the diff inside a glowing panel
+        diff_panel = Panel(
+            Syntax(diff or "(sin cambios)", "diff", theme="monokai", line_numbers=True),
+            border_style="bold green",
+            title="[bold green]◈ GLOWING PATCH COMPARISON ◈[/bold green]",
+            box=box.DOUBLE
+        )
+        self.console.print(diff_panel)
         self.console.print()
         
-        return self.assume_yes or Confirm.ask("¿Aplicar este parche?", default=True, console=self.console)
+        return self.assume_yes or Confirm.ask("[bold cyan]▶ Authorize neural patch injection?[/bold cyan]", default=True, console=self.console)
 
     def stop(self) -> None:
         if self.status_active:
@@ -125,8 +161,20 @@ class TerminalView:
 
     def success(self, message: str) -> None:
         self.stop()
-        self.console.print(Panel(f"[bold green]🎉 Éxito:[/bold green] {message}", border_style="green"))
+        self.console.print(Panel(
+            f"[bold green]🚀 PATCH INJECTED & VALIDATED IN ISOLATION WORKSPACE[/bold green]\n"
+            f"[white]{message}[/white]",
+            title="❖ STARK-REPAIR PROCESS SUCCESSFUL ❖",
+            border_style="bold green",
+            box=box.DOUBLE
+        ))
 
     def error(self, message: str) -> None:
         self.stop()
-        self.console.print(Panel(f"[bold red]⛔ Reparación detenida:[/bold red]\n{message}", border_style="red"))
+        self.console.print(Panel(
+            f"[bold red]⚡ HEALING PROCESS TERMINATED PREMATURELY[/bold red]\n"
+            f"[white]Reason: {message}[/white]",
+            title="❖ SYSTEM RECONSTRUCTION ERROR ❖",
+            border_style="bold red",
+            box=box.DOUBLE
+        ))

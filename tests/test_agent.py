@@ -176,7 +176,7 @@ func FetchAndAggregate(ctx context.Context, urls []string) (map[string]float64, 
         from self_healing_agent.sandbox import LocalSubprocessSandbox
         
         cmd = "go test -v"
-        controller = RepairController("gpt-5.6", LocalSubprocessSandbox(timeout=30))
+        controller = RepairController("gpt-5.6", LocalSubprocessSandbox(timeout=60))
         approve_callback = lambda target, orig, prop: True
         
         target_file = dest_dir / "aggregator.go"

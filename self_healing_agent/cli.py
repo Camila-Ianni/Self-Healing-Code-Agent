@@ -51,9 +51,24 @@ def source_from_test(test_file: Path) -> Path | None:
     return None
 
 
+def load_env_file(root: Path) -> None:
+    """Load variables from .env file in root into os.environ."""
+    env_path = root / ".env"
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                parts = line.split("=", 1)
+                k = parts[0].strip()
+                v = parts[1].strip().strip('"').strip("'")
+                if k and v:
+                    os.environ[k] = v
+
+
 def main() -> None:
     args = build_parser().parse_args()
     root = args.root.resolve()
+    load_env_file(root)
     
     # Check if rollback command was invoked
     if args.rollback:

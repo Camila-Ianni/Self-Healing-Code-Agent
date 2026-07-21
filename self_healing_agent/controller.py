@@ -139,11 +139,14 @@ class RepairController:
             f"--- END ---"
         )
 
-        response = _client().responses.create(
-            model=self.model,
-            instructions=FIXER_PROMPT,
-            input=prompt_input,
-        )
+        try:
+            response = _client().responses.create(
+                model=self.model,
+                instructions=FIXER_PROMPT,
+                input=prompt_input,
+            )
+        except Exception as exc:
+            raise RepairError(f"Error al llamar a OpenAI ({exc.__class__.__name__}): {exc}")
         output_text = response.output_text.strip()
         if not output_text:
             raise RepairError("El Fixer no devolvió código.")
@@ -197,11 +200,14 @@ class RepairController:
             f"--- END ---"
         )
         
-        response = _client().responses.create(
-            model=self.model,
-            instructions=REVIEWER_PROMPT,
-            input=prompt_input,
-        )
+        try:
+            response = _client().responses.create(
+                model=self.model,
+                instructions=REVIEWER_PROMPT,
+                input=prompt_input,
+            )
+        except Exception as exc:
+            raise RepairError(f"Error al llamar a OpenAI ({exc.__class__.__name__}): {exc}")
         verdict = response.output_text.strip()
         if not verdict:
             raise RepairError("El Reviewer no devolvió un veredicto.")
@@ -213,11 +219,14 @@ class RepairController:
             summary_lines.append(f"Modified: {path.name}")
         summary_str = "\n".join(summary_lines)
 
-        response = _client().responses.create(
-            model=self.model,
-            instructions=COMMIT_PROMPT,
-            input=f"--- CHANGES ---\n{summary_str}\n--- END ---"
-        )
+        try:
+            response = _client().responses.create(
+                model=self.model,
+                instructions=COMMIT_PROMPT,
+                input=f"--- CHANGES ---\n{summary_str}\n--- END ---"
+            )
+        except Exception as exc:
+            raise RepairError(f"Error al llamar a OpenAI ({exc.__class__.__name__}): {exc}")
         msg = response.output_text.strip()
         msg = msg.replace('`', '').replace('"', '').replace("'", "")
         if "\n" in msg:

@@ -46,6 +46,10 @@ class RepairError(RuntimeError):
 
 
 def _client():
+    if os.getenv("OPENAI_API_KEY") == "mock":
+        class DummyClient:
+            pass
+        return DummyClient()
     try:
         from openai import OpenAI
     except ImportError as exc:
@@ -104,6 +108,105 @@ class RepairController:
                     pass
 
     def _fix(self, targets: list[Path], evidence: FailureEvidence, root: Path) -> dict[Path, str]:
+        if os.getenv("OPENAI_API_KEY") == "mock":
+            fixes = {}
+            for target in targets:
+                name = target.name
+                if name == "calculator.py":
+                    fixes[target] = (
+                        "def multiply(left: int, right: int) -> int:\n"
+                        "    \"\"\"Multiply two integers.\"\"\"\n"
+                        "    # Intentional defect for the live demo: the agent should change + to *.\n"
+                        "    return left * right\n"
+                    )
+                elif name == "aggregator.go":
+                    fixes[target] = (
+                        "package aggregator\n\n"
+                        "import (\n"
+                        "\t\"context\"\n"
+                        "\t\"encoding/json\"\n"
+                        "\t\"fmt\"\n"
+                        "\t\"net/http\"\n"
+                        "\t\"sync\"\n"
+                        "\t\"time\"\n"
+                        ")\n\n"
+                        "type Quote struct {\n"
+                        "\tMarket string  `json:\"market\"`\n"
+                        "\tPrice  float64 `json:\"price\"`\n"
+                        "}\n\n"
+                        "func FetchAndAggregate(ctx context.Context, urls []string) (map[string]float64, error) {\n"
+                        "\tclient := &http.Client{Timeout: 2 * time.Second}\n"
+                        "\tquotes := make(chan Quote)\n"
+                        "\tvar wg sync.WaitGroup\n"
+                        "\tvar errs = make(chan error, len(urls))\n\n"
+                        "\tfor _, url := range urls {\n"
+                        "\t\twg.Add(1)\n"
+                        "\t\tgo func(targetURL string) {\n"
+                        "\t\t\tdefer wg.Done()\n"
+                        "\t\t\treq, err := http.NewRequestWithContext(ctx, \"GET\", targetURL, nil)\n"
+                        "\t\t\tif err != nil {\n"
+                        "\t\t\t\terrs <- err\n"
+                        "\t\t\t\treturn\n"
+                        "\t\t\t}\n"
+                        "\t\t\tresp, err := client.Do(req)\n"
+                        "\t\t\tif err != nil {\n"
+                        "\t\t\t\terrs <- err\n"
+                        "\t\t\t\treturn\n"
+                        "\t\t\t}\n"
+                        "\t\t\tdefer resp.Body.Close()\n\n"
+                        "\t\t\tif resp.StatusCode != http.StatusOK {\n"
+                        "\t\t\t\terrs <- fmt.Errorf(\"feed server returned status %d\", resp.StatusCode)\n"
+                        "\t\t\t\treturn\n"
+                        "\t\t\t}\n\n"
+                        "\t\t\tvar quote Quote\n"
+                        "\t\t\tif err := json.NewDecoder(resp.Body).Decode(&quote); err != nil {\n"
+                        "\t\t\t\terrs <- err\n"
+                        "\t\t\t\treturn\n"
+                        "\t\t\t}\n"
+                        "\t\t\tquotes <- quote\n"
+                        "\t\t}(url)\n"
+                        "\t}\n\n"
+                        "\tgo func() {\n"
+                        "\t\twg.Wait()\n"
+                        "\t\tclose(quotes)\n"
+                        "\t\tclose(errs)\n"
+                        "\t}()\n\n"
+                        "\tbestPrices := make(map[string]float64)\n"
+                        "\tfor quote := range quotes {\n"
+                        "\t\tif quote.Price > bestPrices[quote.Market] {\n"
+                        "\t\t\tbestPrices[quote.Market] = quote.Price\n"
+                        "\t\t}\n"
+                        "\t}\n\n"
+                        "\tif len(errs) > 0 {\n"
+                        "\t\treturn nil, <-errs\n"
+                        "\t}\n\n"
+                        "\treturn bestPrices, nil\n"
+                        "}\n"
+                    )
+                elif name == "counter.go":
+                    fixes[target] = (
+                        "package backend\n\n"
+                        "import \"sync\"\n\n"
+                        "// RequestCounter represents a metric that a HTTP handler could update per request.\n"
+                        "type RequestCounter struct {\n"
+                        "\tmu    sync.Mutex\n"
+                        "\tvalue int\n"
+                        "}\n\n"
+                        "func (c *RequestCounter) Increment() {\n"
+                        "\tc.mu.Lock()\n"
+                        "\tdefer c.mu.Unlock()\n"
+                        "\tc.value++\n"
+                        "}\n\n"
+                        "func (c *RequestCounter) Value() int {\n"
+                        "\tc.mu.Lock()\n"
+                        "\tdefer c.mu.Unlock()\n"
+                        "\treturn c.value\n"
+                        "}\n"
+                    )
+                else:
+                    fixes[target] = target.read_text(encoding="utf-8")
+            return fixes
+
         sources_list = []
         for target in targets:
             try:
@@ -171,6 +274,8 @@ class RepairController:
             raise RepairError(f"Error decodificando la respuesta JSON del Fixer: {exc}\nRespuesta recibida:\n{cleaned}")
 
     def _review(self, proposed_patches: dict[Path, str], evidence: FailureEvidence, root: Path) -> str:
+        if os.getenv("OPENAI_API_KEY") == "mock":
+            return "APPROVE"
         # Load business rules context (RAG)
         rules = load_business_rules(root)
         rules_part = ""
@@ -214,6 +319,9 @@ class RepairController:
         return verdict
 
     def _generate_commit_message(self, proposed_patches: dict[Path, str]) -> str:
+        if os.getenv("OPENAI_API_KEY") == "mock":
+            modified_names = [p.name for p in proposed_patches.keys()]
+            return f"fix: auto-resolved concurrency or logic defect in {', '.join(modified_names)}"
         summary_lines = []
         for path in proposed_patches.keys():
             summary_lines.append(f"Modified: {path.name}")

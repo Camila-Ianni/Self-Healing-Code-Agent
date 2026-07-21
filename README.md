@@ -2,7 +2,7 @@
 
 > 🎥 **Video demo (< 3 min):** `PEGAR AQUÍ EL ENLACE PÚBLICO DE YOUTUBE ANTES DE ENTREGAR`
 >
-> 🆔 **Codex Session ID (/feedback):** `PEGAR AQUÍ EL SESSION ID ANTES DE ENTREGAR`
+> 🆔 **Codex Session ID (/feedback):** `019f824e-0a6a-7530-a6a1-4134a4093fd1`
 
 CLI de Python que convierte un test fallido en un ciclo de reparación verificable: ejecuta los tests, captura el stack trace, localiza el archivo fuente, solicita una corrección a OpenAI y **solo conserva el cambio si los tests pasan**. Si el intento falla, restaura el archivo original.
 

@@ -1,16 +1,16 @@
 # Self-Healing Code Agent
 
-> 🎥 **Video demo (< 3 min):** `PEGAR AQUÍ EL ENLACE PÚBLICO DE YOUTUBE ANTES DE ENTREGAR`
+> 🎥 **Video demo (< 3 min):** `PASTE PUBLIC YOUTUBE LINK HERE BEFORE SUBMITTING`
 >
 > 🆔 **Codex Session ID (/feedback):** `019f824e-0a6a-7530-a6a1-4134a4093fd1`
 
-CLI de Python que convierte un test fallido en un ciclo de reparación verificable: ejecuta los tests, captura el stack trace, localiza el archivo fuente, solicita una corrección a OpenAI y **solo conserva el cambio si los tests pasan**. Si el intento falla, restaura el archivo original.
+Python CLI that transforms a failing test into a verifiable repair loop: executes tests, captures the stack trace, localizes the target source files, requests a correction from OpenAI, and **retains the changes only if the tests pass**. If the validation attempt fails, it automatically rolls back the changes.
 
-**Cómo aceleró Codex el proyecto:** Codex generó el esqueleto de la CLI, separó el motor de reparación de la interfaz, creó la demo y ayudó a implementar el ciclo de validación con rollback. Así pude enfocar el tiempo en el flujo agentic y en una demo que un juez puede ejecutar de inmediato.
+**How Codex accelerated this project:** Codex generated the CLI skeleton, separated the core repair engine from the interface, created the demo, and helped implement the validation loop with rollback. This allowed me to focus my time on the agentic flow and creating a demo that judges can run immediately.
 
-## Demo en 30 segundos
+## 30-Second Demo
 
-El ejemplo contiene a propósito un error en `example/calculator.py`: `multiply(6, 7)` suma en vez de multiplicar.
+The example intentionally contains an error in `example/calculator.py`: `multiply(6, 7)` performs addition instead of multiplication.
 
 ```bash
 git clone https://github.com/Camila-Ianni/Self-Healing-Code-Agent.git
@@ -18,53 +18,53 @@ cd Self-Healing-Code-Agent
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e '.[dev]'
-export OPENAI_API_KEY="tu_clave"
+export OPENAI_API_KEY="your_key"
 
-# Comando recomendado para jueces (no necesitan conocer opciones):
+# Recommended command for judges (no options need to be known):
 python -m self_healing_agent.cli test ./example/test_calculator.py
 ```
 
-Salida esperada:
+Expected output:
 
 ```text
-❌ Tests fallaron. Analizando example/calculator.py con gpt-5.6…
-✅ Reparación validada. Parche aplicado en example/calculator.py (...)
+❌ Tests failed. Analyzing example/calculator.py with gpt-5.6…
+✅ Repair validated. Patch applied in example/calculator.py (...)
 ```
 
-Luego `pytest -q example` queda en verde. Para repetir la demo, vuelve a cambiar `return left * right` por `return left + right`.
+Then `pytest -q example` turns green. To repeat the demo, change `return left * right` back to `return left + right`.
 
 ## Business Value & ROI
 
-El Self-Healing Code Agent no es solo una herramienta de conveniencia técnica; es una solución de nivel empresarial diseñada para optimizar los procesos operativos de desarrollo y sistemas.
+The Self-Healing Code Agent is not just a technical convenience tool; it is an enterprise-grade solution designed to optimize development and systems operation workflows.
 
-### 📈 Impacto en el Negocio y ROI
-* **Reducción Drástica del MTTR (Mean Time to Repair)**: Automatiza el análisis y corrección de regresiones en pipelines de integración continua en cuestión de segundos, disminuyendo notablemente el tiempo de inactividad (downtime) de los servicios de producción.
-* **Ahorro Directo en Costos de Ingeniería (Horas-Hombre)**: Libera a los desarrolladores del desgaste de depurar errores triviales, sintácticos o fallos de concurrencia típicos (deadlocks, condiciones de carrera). Esto se traduce en un ahorro directo de miles de dólares en horas de desarrollo dedicadas a debugging mecánico.
-* **Mitigación del Riesgo Operativo (Seguridad en Sandbox)**: Al forzar la ejecución en entornos aislados (Docker o subprocess con límites de recursos POSIX), se evita que fallos descontrolados afecten la infraestructura compartida de integración.
-* **Auditoría Dual Automática**: La combinación de un Fixer con un Reviewer independiente previene la propagación de bugs de rendimiento o vulnerabilidades de seguridad antes de que el parche sea aprobado.
+### 📈 Business Impact & ROI
+* **Drastic MTTR (Mean Time to Repair) Reduction**: Automatically analyzes and corrects regressions in CI pipelines within seconds, significantly reducing downtime for production services.
+* **Direct Engineering Cost Savings (Man-Hours)**: Relieves developers from the tedium of debugging trivial syntax errors or common concurrency bugs (deadlocks, race conditions). This translates directly to saving thousands of dollars in engineering hours previously spent on mechanical debugging.
+* **Operational Risk Mitigation (Sandbox Security)**: By enforcing test validation inside isolated environments (Docker or subprocesses with POSIX resource limits), it prevents runaway tests or destructive scripts from impacting shared integration infrastructure.
+* **Automated Dual-Agent Audit**: The combination of a Fixer agent with an independent Reviewer agent prevents the introduction of performance bottlenecks or security vulnerabilities before any patch is committed.
 
-## Cómo funciona
+## How it Works
 
 ```text
-test command → stack trace → Fixer Agent → Reviewer Agent → diff + confirmación → tests
-                                                         ├─ rechazo: no escribir nada
-                                                         └─ aprobado: parche temporal → pasan: conservar / fallan: rollback
+test command → stack trace → Fixer Agent → Reviewer Agent → diff + confirmation → tests
+                                                         ├─ rejection: discard changes
+                                                         └─ approval: temporary patch → pass: retain / fail: rollback
 ```
 
-La arquitectura sigue una separación estricta Modelo–Controlador–Vista:
+The architecture strictly follows a Model–View–Controller (MVC) separation of concerns:
 
-- `model.py`: evidencia inmutable del test y parseo profundo de stack traces Python/Go.
-- `controller.py`: orquesta Fixer, Reviewer, aprobación humana y persistencia.
-- `view.py`: spinner Rich, diff coloreado y confirmación en terminal.
-- `sandbox.py`: copia temporal + contenedor Docker restringido para la validación.
+- `model.py`: Immutable test evidence and deep parsing of Python and Go stack traces.
+- `controller.py`: Orchestrates the Fixer, Reviewer, human approval, backups, and persistence.
+- `view.py`: Rich terminal spinner, colorized diff, alerts, and CLI confirmation.
+- `sandbox.py`: Temporary workspace copying and constrained Docker/subprocess environments for validation.
 
-El **Fixer Agent** propone el archivo completo corregido. Antes de cualquier escritura, el **Reviewer Agent** analiza esa propuesta buscando riesgos de seguridad, loops infinitos, regresiones de rendimiento, data races y deadlocks. Solo un veredicto `APPROVE` habilita el diff coloreado y la confirmación del usuario. Los backups se guardan en `.self-healing-backups/` y no se versionan.
+The **Fixer Agent** proposes the complete corrected file contents. Before writing any changes, the **Reviewer Agent** audits the proposal searching for security risks, infinite loops, performance regressions, data races, and deadlocks. Only an `APPROVE` verdict unlocks the colorized diff and user confirmation. Local backups are stored as hidden `.{filename}.bak` files in the same directory and are not version-controlled.
 
-Usá `--yes` para aceptar el parche aprobado sin interacción, útil para automatizaciones.
+Use `--yes` to apply approved patches automatically without terminal confirmation (useful for automation pipelines).
 
-## Demo backend concurrente (Go)
+## Concurrent Backend Demo (Go)
 
-Además de la calculadora, `example/go_backend/` reproduce una condición de carrera típica de un contador de requests de servidor. El test usa el detector de carreras de Go:
+In addition to the calculator, `example/go_backend/` reproduces a typical race condition in a web server request counter. The test uses Go's race detector:
 
 ```bash
 self-heal \
@@ -72,11 +72,11 @@ self-heal \
   --source example/go_backend/counter.go
 ```
 
-El Fixer debe reemplazar el acceso concurrente inseguro por sincronización correcta; el Reviewer revisa explícitamente race conditions y deadlocks antes de mostrar el diff. Esta demo requiere Go 1.22+ y `OPENAI_API_KEY`.
+The Fixer must replace the unsafe concurrent access with correct synchronization; the Reviewer explicitly checks for race conditions and deadlocks before presenting the diff. This demo requires Go 1.22+ and a valid `OPENAI_API_KEY`.
 
-### Integración asíncrona de mercados
+### Asynchronous Market Integration
 
-`example/go_market_aggregator/` simula respuestas JSON de plataformas de mercados predictivos. El bug bloquea goroutines contra un channel sin buffer mientras el `sync.WaitGroup` espera que terminen; el test expone un timeout con el diagnóstico exacto.
+`example/go_market_aggregator/` simulates JSON responses from predictive market platforms. The bug deadlocks goroutines against an unbuffered channel while the `sync.WaitGroup` waits for them to finish; the test exposes a timeout with the exact diagnosis.
 
 ```bash
 self-heal \
@@ -84,60 +84,62 @@ self-heal \
   --source example/go_market_aggregator/aggregator.go
 ```
 
-La reparación esperada coordina correctamente `channels` y `sync.WaitGroup`, y conserva la deserialización JSON de los feeds concurrentes.
+The expected repair correctly coordinates the channels and the `sync.WaitGroup` while preserving the concurrent JSON deserialization of the feeds.
 
-## Sandbox de validación
+## Validation Sandbox
 
-Antes de sobrescribir un archivo local, la propuesta aprobada se copia a un directorio temporal y se prueba dentro de un contenedor Docker efímero. Ese contenedor ejecuta con red deshabilitada, sin capacidades Linux, `no-new-privileges`, límite de 768 MB, dos CPUs y hasta 256 procesos. El único volumen montado es la copia temporal, nunca tu working tree.
+Before overwriting any local file, the approved proposal is copied to a temporary directory and validated inside an ephemeral Docker container. This container runs with networking disabled, dropped Linux capabilities, `no-new-privileges`, a 768 MB memory limit, 2 CPUs, and a maximum of 256 processes. The only mounted volume is the temporary workspace copy—never your live working tree.
 
-Construí la imagen una sola vez:
+Build the sandbox image once:
 
 ```bash
 docker build -t self-healing-sandbox:latest -f Dockerfile.sandbox .
 ```
 
-Sin esa imagen, la CLI rechaza el parche y no escribe nada. Podés proveer otra imagen compatible con `--sandbox-image nombre:tag`.
+If this image is not found, the CLI falls back automatically to a local subprocess sandbox that enforces strict POSIX limits (`resource.setrlimit`) to isolate execution. You can also supply a custom image via `--sandbox-image name:tag`.
 
-## Configuración
+## Configuration
 
-La CLI utiliza la [Responses API de OpenAI](https://developers.openai.com/api/docs/guides/text). Por defecto usa `gpt-5.6`; se puede ajustar sin editar código:
+The CLI uses the [OpenAI Responses API](https://developers.openai.com/api/docs/guides/text). By default, it uses `gpt-5.6`; this can be overridden without changing the code:
 
 ```bash
 export OPENAI_MODEL="gpt-5.6"
 self-heal --test-command "pytest -q"
 ```
 
-Opciones principales:
+Primary options:
 
 ```text
---test-command "pytest -q"       Comando a ejecutar y capturar
---source path/to/module.py        Archivo que el agente puede modificar
---model gpt-5.6                   Modelo de OpenAI
---root .                          Raíz del proyecto
+--test-command "pytest -q"       Test command to run and capture
+--source path/to/module.py       File(s) the agent is allowed to modify
+--model gpt-5.6                  OpenAI model name
+--root .                         Project root directory
+--sandbox docker                 Sandbox type: 'docker' or 'subprocess'
+--commit                         Automatically commit the changes to Git with AI messages
+--rollback                       Restore backups recursively from hidden .bak files
 ```
 
-## Verificación del proyecto
+## Project Verification
 
 ```bash
 pip install -e '.[dev]'
 pytest -q
 ```
 
-Los tests propios validan la captura de fallos y la localización segura del archivo. La reparación end-to-end necesita una `OPENAI_API_KEY` válida, por lo que no se ejecuta durante la suite local.
+The internal unit tests validate exception capturing and safe target localization. End-to-end repairs require a valid `OPENAI_API_KEY`, so they are mocked during local test suite runs.
 
-## Seguridad y límites
+## Security & Guardrails
 
-- El modelo nunca recibe permisos de shell: devuelve solamente el contenido completo del archivo seleccionado.
-- Dos llamadas independientes separan la propuesta (Fixer) de la aprobación de seguridad (Reviewer).
-- El diff se muestra y requiere confirmación antes de escribir; `--yes` es la única excepción explícita.
-- El código propuesto se ejecuta solo en el sandbox Docker antes de persistirlo localmente.
-- El archivo solo queda modificado tras una nueva ejecución exitosa de los tests.
-- La versión actual está enfocada en Python y en reparar un archivo por ciclo; no sustituye revisión humana para cambios de producción.
+- The model never receives shell execution permissions; it only returns the complete content of the target files.
+- Two independent model calls separate the proposal (Fixer) from the safety audit (Reviewer).
+- The diff is displayed and requires explicit user confirmation before writing; `--yes` is the only override.
+- The proposed code runs strictly inside the Docker/subprocess sandbox before being persisted locally.
+- The working tree is only permanently updated after a successful test run on the modified code.
 
-## Uso de Codex y GPT-5.6
+## Use of Codex and GPT-5.6
 
-Codex aceleró la creación del esqueleto de la CLI, la suite de pruebas, el flujo de rollback y esta documentación. GPT-5.6 es el motor de razonamiento dentro del producto: recibe el código y la evidencia concreta del test fallido, propone una corrección mínima y el agente la valida de forma automática.
+Codex accelerated the creation of the CLI skeleton, test suite, rollback workflow, and this documentation. GPT-5.6 is the reasoning engine behind the product: it receives the source code and failing test evidence, proposes a minimal correct patch, and the agent validates it automatically.
 
 ## Video
 
-Pegá el enlace público de YouTube al comienzo de este README antes de entregar.
+Paste the public YouTube link at the top of this README before submitting.

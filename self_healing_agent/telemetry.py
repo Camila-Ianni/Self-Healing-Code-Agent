@@ -59,3 +59,85 @@ class TelemetryManager:
         
         self.save_report(report)
         return report
+
+
+def generate_executive_report(
+    root: Path,
+    evidence: FailureEvidence,
+    proposed_patches: dict[Path, str],
+    sandbox_output: str,
+    ai_time_seconds: float,
+    human_saved_minutes: int,
+    output_path: Path
+) -> None:
+    """Generate a beautiful markdown report describing the incident, code diff and ROI metrics."""
+    import datetime
+    from difflib import unified_diff
+    
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    target_files_str = ", ".join(
+        [str(f.relative_to(root.resolve())) if f.is_relative_to(root.resolve()) else f.name for f in proposed_patches.keys()]
+    )
+    
+    diff_blocks = []
+    for path, proposed in proposed_patches.items():
+        original = path.read_text(encoding="utf-8")
+        diff = "\n".join(unified_diff(
+            original.splitlines(),
+            proposed.splitlines(),
+            fromfile=f"original/{path.name}",
+            tofile=f"reconstructed/{path.name}",
+            lineterm=""
+        ))
+        diff_blocks.append(f"### File: {path.name}\n```diff\n{diff or '(No changes detected)'}\n```")
+    diffs_joined = "\n\n".join(diff_blocks)
+    
+    report_content = f"""# Executive Code Repair Report
+
+**Date**: {timestamp}  
+**Diagnostic Language**: {evidence.language.upper()}  
+**Target Files**: {target_files_str}
+
+---
+
+## 1. Incident Summary & Failure Telemetry
+An integrity failure was captured during automated test execution.
+
+**Error Message**:
+```
+{evidence.error_message}
+```
+
+### Raw Test Traceback
+```
+{evidence.raw_output}
+```
+
+---
+
+## 2. Sandbox Verification Details
+The proposed patch was copied to an isolated workspace and validated.
+
+### Test execution output (Sandbox):
+```
+{sandbox_output}
+```
+**Sandbox Verdict**: `PASSED` (All tests resolved successfully, no regressions detected).
+
+---
+
+## 3. Code Modifications (Unified Diff)
+{diffs_joined}
+
+---
+
+## 4. Business Metrics & ROI Impact
+By automating this repair cycle, the system saved mechanical developer hours.
+
+| Metric | Value |
+| :--- | :--- |
+| **AI Healing Cycle Duration** | {ai_time_seconds:.2f} seconds |
+| **Avoided Human Debugging Time** | {human_saved_minutes} minutes |
+| **Status** | Verified and Applied Locally |
+"""
+    output_path.write_text(report_content, encoding="utf-8")

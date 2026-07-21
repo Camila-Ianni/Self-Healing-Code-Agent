@@ -359,3 +359,40 @@ def test_ci_mode_headless_push(tmp_path: Path) -> None:
                     mock_sub.assert_any_call(["git", "push", "origin", "HEAD"], cwd=tmp_path, check=True)
 
 
+def test_generate_executive_report(tmp_path: Path) -> None:
+    from self_healing_agent.telemetry import generate_executive_report
+    from self_healing_agent.model import FailureEvidence
+    
+    file1 = tmp_path / "app.py"
+    file1.write_text("def add(a, b): return a + b\n", encoding="utf-8")
+    
+    evidence = FailureEvidence(
+        passed=False,
+        returncode=1,
+        raw_output="AssertionError: assert 5 == 6",
+        error_message="AssertionError: assert 5 == 6",
+        frames=[],
+        target_files=[file1],
+        language="python"
+    )
+    
+    report_file = tmp_path / "report.md"
+    generate_executive_report(
+        root=tmp_path,
+        evidence=evidence,
+        proposed_patches={file1: "def add(a, b): return a + b + 1\n"},
+        sandbox_output="1 passed in 0.01s",
+        ai_time_seconds=12.4,
+        human_saved_minutes=20,
+        output_path=report_file
+    )
+    
+    assert report_file.exists()
+    content = report_file.read_text(encoding="utf-8")
+    assert "Executive Code Repair Report" in content
+    assert "AssertionError: assert 5 == 6" in content
+    assert "1 passed in 0.01s" in content
+    assert "20 minutes" in content
+
+
+

@@ -198,6 +198,26 @@ class TerminalView:
         self.console.print(roi_panel)
         self.console.print()
 
+    def ask_generate_report(self) -> bool:
+        self.stop()
+        self.console.print()
+        return self.assume_yes or Confirm.ask(
+            "[bold cyan]▶ Auto-generate executive repair documentation? (y/n)[/bold cyan]",
+            default=True,
+            console=self.console
+        )
+
+    def ask_report_path(self, default_path: str) -> str:
+        self.stop()
+        from rich.prompt import Prompt
+        self.console.print()
+        path_str = Prompt.ask(
+            f"[bold cyan]▶ Enter destination path[/bold cyan]",
+            default=default_path,
+            console=self.console
+        )
+        return path_str
+
     def success(self, message: str) -> None:
         self.stop()
         self.console.print(Panel(

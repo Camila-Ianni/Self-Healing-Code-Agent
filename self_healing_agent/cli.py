@@ -154,7 +154,10 @@ def main() -> None:
                 confirm_rollback=None if args.yes else view.ask_rollback,
                 git_commit=args.commit,
                 display_roi=view.display_roi,
-                ci_push=args.ci_mode
+                ci_push=args.ci_mode,
+                ask_report=None if args.yes else view.ask_generate_report,
+                ask_report_path=None if args.yes else view.ask_report_path,
+                notify_report_saved=lambda path: view.console.print(f"[bold green]✔ Saved successfully at {path}[/bold green]")
             )
         )
     except RepairError as error:

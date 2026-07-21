@@ -354,6 +354,9 @@ class RepairController:
         git_commit: bool = False,
         display_roi: Callable[[dict], None] | None = None,
         ci_push: bool = False,
+        ask_report: Callable[[], bool] | None = None,
+        ask_report_path: Callable[[str], str] | None = None,
+        notify_report_saved: Callable[[str], None] | None = None,
     ) -> str:
         event = notify or (lambda _: None)
         
@@ -455,6 +458,32 @@ class RepairController:
         
         if display_roi:
             display_roi(roi_report)
+
+        # Executive report generation
+        if ask_report:
+            try:
+                want_report = ask_report()
+                if want_report and ask_report_path:
+                    first_target = targets[0]
+                    default_name = f"Repair_Report_{evidence.language.capitalize()}_{first_target.stem}.md"
+                    default_path = str(Path.home() / "Desktop" / default_name)
+                    selected_path_str = ask_report_path(default_path)
+                    if selected_path_str:
+                        selected_path = Path(os.path.expanduser(selected_path_str))
+                        from .telemetry import generate_executive_report
+                        generate_executive_report(
+                            root=root,
+                            evidence=evidence,
+                            proposed_patches=proposed_patches,
+                            sandbox_output=verified.output,
+                            ai_time_seconds=duration_seconds,
+                            human_saved_minutes=roi_report["history"][-1]["human_time_saved_minutes"],
+                            output_path=selected_path
+                        )
+                        if notify_report_saved:
+                            notify_report_saved(str(selected_path))
+            except Exception:
+                pass
 
         # Git commit integration if requested
         if git_commit:
